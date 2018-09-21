@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2155
+
+repository=sorah/envchain
+
+install_envchain(){
+     # shellcheck disable=SC2034
+    local install_type=$1
+    local version=$2
+    local install_path=$3
+
+    if [ "$TMPDIR" = "" ]; then
+        # shellcheck disable=SC2155
+        local tmp_download_dir=$(mktemp -d -t asdf-envchain_XXXXXX) 
+    else
+        local tmp_download_dir=$TMPDIR
+    fi
+
+    # path to the tar file
+    # shellcheck disable=SC2155
+    local source_path=$(get_download_file_path "$version" "$tmp_download_dir")
+    echo "$source_path"
+    download_source_file "$version" "$source_path"
+
+    # running this in a subshell
+    # we don't want to disturb current working dir
+    echo "sourcepath : $source_path"
+    echo "installpath: $install_path"
+
+    uname=$(uname -s)
+    if [ "$uname" == "Darwin" ]; then
+        echo "Compiling for MacOSX"
+        check_dependencies_macosx
+    elif [ "${uname}" == "Linux" ]; then
+        echo "Compiling for Linux"
+        check_dependencies_linux
+    else
+        echo "Unsupported platform"
+        exit 2
+    fi
+
+    (
+        compile "$source_path"
+        folder=$(dirname "$source_path")
+        mkdir -p "$install_path/bin" || true
+        mv "$folder/envchain" "$install_path/bin/"
+    )
+}
+
+check_dependencies_macosx() {
+    echo "check dependencies not implemented for macosx"
+    exit 2
+}
+
+check_dependencies_linux() {
+    if command -v dpkg >/dev/null 2>&1; then
+        dpkg --get-selections | grep -E "libsecret.*dev"
+        return
+    fi
+
+    echo "check dependencies not implemented for linux"
+    exit 2
+}
+
+compile() {
+    local source_path
+    source_path=$1
+
+    folder=$(dirname "$source_path")
+    tar zxf "$source_path" -C "$folder" --strip-components=1 || exit 1
+    pushd "$folder"
+    make
+    popd
+}
+
+download_source_file() {
+    local version=$1
+    local download_path=$2
+    # shellcheck disable=SC2155
+    local download_url=$(get_download_url "$version")
+
+    curl -Lo "$download_path" -C - "$download_url"
+}
+
+get_download_file_path() {
+    local version=$1
+    local tmp_download_dir=$2
+    local pkg_name="desk"
+
+    echo "$tmp_download_dir/$pkg_name"
+}
+
+get_download_url() {
+    local version=$1
+
+    echo "https://github.com/$repository/archive/v${version}.tar.gz"
+}
+
+
+install_envchain "$ASDF_INSTALL_TYPE" "$ASDF_INSTALL_VERSION" "$ASDF_INSTALL_PATH"
